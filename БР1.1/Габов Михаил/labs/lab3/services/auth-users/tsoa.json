@@ -1,0 +1,20 @@
+{
+  "entryFile": "src/index.ts",
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "controllerPathGlobs": ["src/controllers/**/*.controller.ts"],
+  "spec": {
+    "outputDirectory": "build",
+    "specVersion": 3,
+    "name": "Auth & Users API",
+    "version": "1.0.0",
+    "components": {
+      "securitySchemes": {
+        "jwt": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+      }
+    }
+  },
+  "routes": {
+    "routesDir": "src/generated",
+    "authenticationModule": "src/middleware/authMiddleware.ts"
+  }
+}
