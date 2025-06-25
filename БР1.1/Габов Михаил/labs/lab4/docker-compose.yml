@@ -1,0 +1,97 @@
+services:
+  users-db:
+    image: postgres:14-alpine
+    container_name: users-db
+    environment: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: users_db }
+    ports: [ "5431:5432" ]
+    volumes: [ users-db-data:/var/lib/postgresql/data ]
+    networks: [ my-network ]
+  recipes-db:
+    image: postgres:14-alpine
+    container_name: recipes-db
+    environment: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: recipes_db }
+    ports: [ "5432:5432" ]
+    volumes: [ recipes-db-data:/var/lib/postgresql/data ]
+    networks: [ my-network ]
+  interactions-db:
+    image: postgres:14-alpine
+    container_name: interactions-db
+    environment: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: interactions_db }
+    ports: [ "5433:5432" ]
+    volumes: [ interactions-db-data:/var/lib/postgresql/data ]
+    networks: [ my-network ]
+
+  auth-users-service:
+    build:
+      context: .
+      dockerfile: ./services/auth-users/Dockerfile
+    container_name: auth-users-service
+    environment:
+      - PORT=3001
+      - DB_HOST=users-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_NAME=users_db
+      - JWT_SECRET=your_jwt_secret_key
+    ports: [ "3001:3001" ]
+    depends_on: [ users-db ]
+    networks: [ my-network ]
+
+  recipes-service:
+    build:
+      context: .
+      dockerfile: ./services/recipes/Dockerfile
+    container_name: recipes-service
+    environment:
+      - PORT=3002
+      - DB_HOST=recipes-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_NAME=recipes_db
+      - JWT_SECRET=your_jwt_secret_key
+    ports: [ "3002:3002" ]
+    depends_on: [ recipes-db ]
+    networks: [ my-network ]
+
+  interactions-service:
+    build:
+      context: .
+      dockerfile: ./services/interactions/Dockerfile
+    container_name: interactions-service
+    environment:
+      - PORT=3003
+      - DB_HOST=interactions-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_NAME=interactions_db
+      - JWT_SECRET=your_jwt_secret_key
+    ports: [ "3003:3003" ]
+    depends_on: [ interactions-db ]
+    networks: [ my-network ]
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    container_name: api-gateway
+    environment:
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-users-service:3001
+      - RECIPES_SERVICE_URL=http://recipes-service:3002
+      - INTERACTIONS_SERVICE_URL=http://interactions-service:3003
+      - JWT_SECRET=your_jwt_secret_key
+    ports: [ "3000:3000" ]
+    depends_on: [ auth-users-service, recipes-service, interactions-service ]
+    networks: [ my-network ]
+
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  users-db-data:
+  recipes-db-data:
+  interactions-db-data:
