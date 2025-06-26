@@ -1,11 +1,15 @@
+// lab4/services/recipes/src/controllers/recipe.controller.ts
 import {
-    Body, Controller, Delete, Get, Path, Post, Put, Query, Route, SuccessResponse, Tags
+    Body, Controller, Delete, Get, Path, Post, Put, Query, Route, SuccessResponse, Tags, Res, TsoaResponse
 } from "tsoa";
 import { AppDataSource } from "../data-source";
 import { Ingredient, Recipe, RecipeIngredient, RecipeStep } from "../models";
 import {
     RecipeCreateDto, RecipeDetailResponseDto, RecipeListResponseDto, RecipeUpdateDto
 } from "../dtos/recipe.dto";
+import { Channel } from 'amqplib';
+import { rabbitMQChannel } from '../index';
+import axios from 'axios';
 
 @Route("recipes")
 @Tags("Recipes")
@@ -19,6 +23,7 @@ export class RecipeController extends Controller {
     @Post()
     public async createRecipe(
         @Body() requestBody: RecipeCreateDto,
+        @Res() res: TsoaResponse<400 | 500, { message: string }>
     ): Promise<RecipeDetailResponseDto> {
         const { ingredients, steps, user, ...recipeData } = requestBody;
 
@@ -66,7 +71,23 @@ export class RecipeController extends Controller {
             relations: ["steps", "recipeIngredients", "recipeIngredients.ingredient"],
         });
 
-        return this.toRecipeDetailDto(fullRecipe);
+        if (rabbitMQChannel) {
+            const queue = 'new_recipe_events';
+            const msg = JSON.stringify({
+                type: 'RecipeCreated',
+                recipeId: savedRecipe.id,
+                title: savedRecipe.title,
+                userId: savedRecipe.userId,
+                createdAt: savedRecipe.createdAt,
+            });
+            await rabbitMQChannel.assertQueue(queue, { durable: true });
+            rabbitMQChannel.sendToQueue(queue, Buffer.from(msg));
+            console.log(`[Recipes Service] Sent message to ${queue}: ${msg}`);
+        } else {
+            console.warn('[Recipes Service] RabbitMQ channel not available. Message for new recipe not sent.');
+        }
+
+        return await this.toRecipeDetailDto(fullRecipe);
     }
 
     @Get()
@@ -82,7 +103,7 @@ export class RecipeController extends Controller {
         if (ingredient) qb.andWhere("ing.name ILIKE :ing", { ing: `%${ingredient}%` });
 
         const recipes = await qb.getMany();
-        return recipes.map(this.toRecipeListDto);
+        return await Promise.all(recipes.map(r => this.toRecipeListDto(r)));
     }
 
     @Get("/{recipeId}")
@@ -95,7 +116,7 @@ export class RecipeController extends Controller {
             this.setStatus(404);
             throw new Error("Recipe not found");
         }
-        return this.toRecipeDetailDto(recipe);
+        return await this.toRecipeDetailDto(recipe);
     }
 
     @Put("/{recipeId}")
@@ -127,7 +148,7 @@ export class RecipeController extends Controller {
             where: { id: recipeId },
             relations: ["steps", "recipeIngredients", "recipeIngredients.ingredient"],
         });
-        return this.toRecipeDetailDto(updatedRecipe);
+        return await this.toRecipeDetailDto(updatedRecipe); // ДОБАВИТЬ await
     }
 
     @Delete("/{recipeId}")
@@ -140,8 +161,22 @@ export class RecipeController extends Controller {
         return { success: true };
     }
 
+    private async fetchUsername(userId: number): Promise<string> {
+        try {
+            const response = await axios.get(`http://auth-users-service:3001/users/search/by?id=${userId}`);
+            return response.data.username;
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error(`[Recipes Service] Failed to fetch username for userId ${userId}:`, error.message);
+            } else {
+                console.error(`[Recipes Service] Failed to fetch username for userId ${userId}:`, error);
+            }
+            return "Unknown User";
+        }
+    }
 
-    private toRecipeDetailDto(recipe: Recipe): RecipeDetailResponseDto {
+    private async toRecipeDetailDto(recipe: Recipe): Promise<RecipeDetailResponseDto> {
+        const username = await this.fetchUsername(recipe.userId);
         return {
             id: recipe.id,
             title: recipe.title,
@@ -150,7 +185,7 @@ export class RecipeController extends Controller {
             createdAt: recipe.createdAt,
             user: {
                 id: recipe.userId,
-                username: "fetching...",
+                username: username,
             },
             steps: recipe.steps.map(s => ({
                 id: s.id,
@@ -168,7 +203,8 @@ export class RecipeController extends Controller {
         };
     }
 
-    private toRecipeListDto(recipe: Recipe): RecipeListResponseDto {
+    private async toRecipeListDto(recipe: Recipe): Promise<RecipeListResponseDto> {
+        const username = await this.fetchUsername(recipe.userId);
         return {
             id: recipe.id,
             title: recipe.title,
@@ -177,7 +213,7 @@ export class RecipeController extends Controller {
             createdAt: recipe.createdAt,
             user: {
                 id: recipe.userId,
-                username: "fetching...",
+                username: username,
             },
         };
     }

@@ -21,6 +21,27 @@ services:
     volumes: [ interactions-db-data:/var/lib/postgresql/data ]
     networks: [ my-network ]
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+    networks:
+      - my-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   auth-users-service:
     build:
       context: .
@@ -34,9 +55,15 @@ services:
       - DB_PASS=postgres
       - DB_NAME=users_db
       - JWT_SECRET=your_jwt_secret_key
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
     ports: [ "3001:3001" ]
-    depends_on: [ users-db ]
     networks: [ my-network ]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   recipes-service:
     build:
@@ -51,9 +78,15 @@ services:
       - DB_PASS=postgres
       - DB_NAME=recipes_db
       - JWT_SECRET=your_jwt_secret_key
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
     ports: [ "3002:3002" ]
-    depends_on: [ recipes-db ]
     networks: [ my-network ]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   interactions-service:
     build:
@@ -68,9 +101,15 @@ services:
       - DB_PASS=postgres
       - DB_NAME=interactions_db
       - JWT_SECRET=your_jwt_secret_key
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
     ports: [ "3003:3003" ]
-    depends_on: [ interactions-db ]
     networks: [ my-network ]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   api-gateway:
     build:
@@ -83,9 +122,16 @@ services:
       - RECIPES_SERVICE_URL=http://recipes-service:3002
       - INTERACTIONS_SERVICE_URL=http://interactions-service:3003
       - JWT_SECRET=your_jwt_secret_key
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
     ports: [ "3000:3000" ]
-    depends_on: [ auth-users-service, recipes-service, interactions-service ]
     networks: [ my-network ]
+    depends_on:
+      - auth-users-service
+      - recipes-service
+      - interactions-service
 
 networks:
   my-network:
@@ -95,3 +141,5 @@ volumes:
   users-db-data:
   recipes-db-data:
   interactions-db-data:
+  rabbitmq-data:
+  rabbitmq-log:

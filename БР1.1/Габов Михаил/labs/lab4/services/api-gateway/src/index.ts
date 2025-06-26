@@ -27,7 +27,6 @@ const authenticateAndInjectUser = (req: Request, res: Response, next: NextFuncti
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key') as { userId: number };
             req.headers['x-user-id'] = decoded.userId.toString();
         } catch (err) {
-            // Игнорируем ошибку
         }
     }
     next();
@@ -49,6 +48,16 @@ app.use('/ingredients', proxy(services.recipes, proxyOptions));
 app.use('/comments', proxy(services.interactions, proxyOptions));
 app.use('/likes', proxy(services.interactions, proxyOptions));
 app.use('/favorites', proxy(services.interactions, proxyOptions));
+
+app.use('/auth-api-docs', proxy(services.auth, {
+    proxyReqPathResolver: (req: Request) => `/api-docs${req.url}`
+}));
+app.use('/recipes-api-docs', proxy(services.recipes, {
+    proxyReqPathResolver: (req: Request) => `/api-docs${req.url}`
+}));
+app.use('/interactions-api-docs', proxy(services.interactions, {
+    proxyReqPathResolver: (req: Request) => `/api-docs${req.url}`
+}));
 
 app.listen(PORT, () => {
     console.log(`API Gateway running on http://localhost:${PORT}`);

@@ -18,8 +18,11 @@
     "reflect-metadata": "^0.1.14",
     "swagger-ui-express": "^5.0.1",
     "tsoa": "^6.6.0",
-    "typeorm": "^0.3.22"
+    "typeorm": "^0.3.22",
+    "amqplib": "^0.10.4",
+    "axios": "^1.7.2"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.5"
   }
 }
