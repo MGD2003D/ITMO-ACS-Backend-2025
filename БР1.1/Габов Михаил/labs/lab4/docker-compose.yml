@@ -43,9 +43,7 @@ services:
       retries: 5
 
   auth-users-service:
-    build:
-      context: .
-      dockerfile: ./services/auth-users/Dockerfile
+    image: mgd2003d/auth-users-service:latest
     container_name: auth-users-service
     environment:
       - PORT=3001
@@ -66,9 +64,7 @@ services:
         condition: service_healthy
 
   recipes-service:
-    build:
-      context: .
-      dockerfile: ./services/recipes/Dockerfile
+    image: mgd2003d/auth-users-service:latest
     container_name: recipes-service
     environment:
       - PORT=3002
@@ -89,9 +85,7 @@ services:
         condition: service_healthy
 
   interactions-service:
-    build:
-      context: .
-      dockerfile: ./services/interactions/Dockerfile
+    image: mgd2003d/auth-users-service:latest
     container_name: interactions-service
     environment:
       - PORT=3003
@@ -112,9 +106,7 @@ services:
         condition: service_healthy
 
   api-gateway:
-    build:
-      context: .
-      dockerfile: ./services/api-gateway/Dockerfile
+    image: mgd2003d/auth-users-service:latest
     container_name: api-gateway
     environment:
       - PORT=3000
