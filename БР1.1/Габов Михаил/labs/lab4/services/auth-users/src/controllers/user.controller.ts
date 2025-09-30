@@ -3,11 +3,14 @@ import {
     Controller,
     Delete,
     Get,
+    NoSecurity,
     Path,
     Post,
     Put,
     Query,
+    Request,
     Route,
+    Security,
     SuccessResponse,
     Tags,
 } from "tsoa";
@@ -24,6 +27,7 @@ class LoginDto {
 
 @Route("users")
 @Tags("Users")
+@Security("jwt")
 export class UsersController extends Controller {
     private userRepo = AppDataSource.getRepository(User);
 
@@ -34,6 +38,7 @@ export class UsersController extends Controller {
 
     @SuccessResponse("201", "Created")
     @Post()
+    @NoSecurity()
     public async createUser(@Body() requestBody: UserCreateDto): Promise<UserResponseDto> {
         const hashedPassword = await bcrypt.hash(requestBody.password, 10);
         const user = this.userRepo.create({
@@ -47,12 +52,14 @@ export class UsersController extends Controller {
     }
 
     @Get()
+    @NoSecurity()
     public async getAllUsers(): Promise<UserResponseDto[]> {
         const users = await this.userRepo.find();
         return users.map(user => this.toUserResponseDto(user));
     }
 
     @Get("/{userId}")
+    @NoSecurity()
     public async getUserById(@Path() userId: number): Promise<UserResponseDto> {
         const user = await this.userRepo.findOneBy({ id: userId });
         if (!user) {
@@ -63,8 +70,13 @@ export class UsersController extends Controller {
     }
 
     @Put("/{userId}")
-    public async updateUser(@Path() userId: number, @Body() requestBody: UserUpdateDto): Promise<UserResponseDto> {
+    public async updateUser(@Path() userId: number, @Body() requestBody: UserUpdateDto, @Request() request: any): Promise<UserResponseDto> {
         const userToUpdate = await this.userRepo.findOneBy({ id: userId });
+
+        if (request.user.id !== userId) {
+            this.setStatus(403);
+            throw new Error("You are not authorized to update this profile");
+        }
         if (!userToUpdate) {
             this.setStatus(404);
             throw new Error("User not found");
@@ -78,16 +90,25 @@ export class UsersController extends Controller {
     }
 
     @Delete("/{userId}")
-    public async deleteUser(@Path() userId: number): Promise<{ success: boolean }> {
+    public async deleteUser(@Path() userId: number, @Request() request: any): Promise<{ success: boolean }> {
+
+        if (request.user.id !== userId) {
+            this.setStatus(403);
+            throw new Error("You are not authorized to update this profile");
+        }
+        
         const result = await this.userRepo.delete(userId);
+
         if (!result.affected) {
             this.setStatus(404);
             throw new Error("User not found");
         }
+
         return { success: true };
     }
 
     @Post("/login")
+    @NoSecurity()
     public async loginUser(@Body() requestBody: LoginDto): Promise<{ token: string }> {
         if (!process.env.JWT_SECRET) {
             this.setStatus(500);
@@ -105,6 +126,7 @@ export class UsersController extends Controller {
     }
 
     @Get("/search/by")
+    @NoSecurity()
     public async searchUser(@Query() id?: number, @Query() email?: string): Promise<UserResponseDto> {
         if (!id && !email) {
             this.setStatus(400);

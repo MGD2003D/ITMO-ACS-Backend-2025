@@ -14,11 +14,11 @@
     "express": "^4.21.2",
     "express-async-errors": "^3.1.1",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.14.1",
     "reflect-metadata": "^0.1.14",
     "swagger-ui-express": "^5.0.1",
     "tsoa": "^6.6.0",
-    "typeorm": "^0.3.22"
+    "typeorm": "^0.3.22",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

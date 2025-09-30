@@ -1,5 +1,3 @@
-// services/recipes/src/data-source.ts
-
 import "reflect-metadata";
 import "dotenv/config";
 import { DataSource } from "typeorm";

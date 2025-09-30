@@ -4,16 +4,17 @@
   "workspaces": [
     "services/*"
   ],
-  "description": "Homework 2 – recipes platform backend",
+  "description": "lab 4 – recipes platform backend",
   "main": "build/index.js",
-  "scripts": {
-    "dev": "concurrently \"npm:start:auth\" \"npm:start:recipes\" \"npm:start:interactions\" \"npm:start:gateway\"",
+"scripts": {
+    "dev": "concurrently \"npm:start:auth\" \"npm:start:recipes\" \"npm:start:interactions\" \"npm:start:notifications\" \"npm:start:gateway\"",
     "start:auth": "npm start -w services/auth-users",
     "start:recipes": "npm start -w services/recipes",
     "start:interactions": "npm start -w services/interactions",
+    "start:notifications": "npm start -w services/notifications-service",
     "start:gateway": "ts-node services/api-gateway/src/index.ts",
     "build": "npm run build -ws",
-    "clean": "rimraf services/*/build"
+    "clean": "rimraf --glob \"services/**/{build,generated}\" \"services/**/*.js\" \"services/**/*.tsbuildinfo\""
   },
   "keywords": [],
   "author": "Габов Михаил",
@@ -25,15 +26,13 @@
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "express-async-errors": "^3.1.1",
-    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.14.1",
     "reflect-metadata": "^0.1.14",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "tsoa": "^6.6.0",
     "typeorm": "^0.3.22",
-    "amqplib": "^0.10.4"
+    "amqplib": "0.10.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -43,7 +42,7 @@
     "@types/node": "^22.14.1",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "@types/amqplib": "^0.10.7",
+    "@types/amqplib": "0.10.6",
     "concurrently": "^9.2.0",
     "nodemon": "^3.1.10",
     "rimraf": "^6.0.1",

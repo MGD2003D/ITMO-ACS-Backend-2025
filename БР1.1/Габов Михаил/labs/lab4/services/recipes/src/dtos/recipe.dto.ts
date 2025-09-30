@@ -6,8 +6,7 @@ export class RecipeStepCreateDto {
 }
 
 export class RecipeIngredientCreateDto {
-    id?: number;
-    name!: string;
+    id!: number; 
     amount!: string;
 }
 
@@ -15,7 +14,6 @@ export class RecipeCreateDto {
     title!: string;
     description!: string;
     difficulty!: string;
-    user!: { id: number };
     ingredients?: RecipeIngredientCreateDto[];
     steps?: RecipeStepCreateDto[];
 }

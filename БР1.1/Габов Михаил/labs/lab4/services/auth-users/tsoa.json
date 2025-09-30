@@ -7,14 +7,16 @@
     "specVersion": 3,
     "name": "Auth & Users API",
     "version": "1.0.0",
-    "components": {
-      "securitySchemes": {
-        "jwt": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    "securityDefinitions": {
+      "jwt": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header"
       }
     }
   },
   "routes": {
     "routesDir": "src/generated",
-    "authenticationModule": "src/middleware/authMiddleware.ts"
+    "authenticationModule": "./src/middleware/authMiddleware.ts"
   }
 }

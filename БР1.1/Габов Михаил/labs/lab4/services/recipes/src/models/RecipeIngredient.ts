@@ -21,7 +21,7 @@ export class RecipeIngredient {
 
     @ManyToOne(() => Ingredient, (ingredient) => ingredient.id, {
         eager: true,
-        onDelete: "CASCADE",
+        onDelete: "RESTRICT",
     })
     @JoinColumn({ name: "ingredient_id" })
     ingredient!: Ingredient;

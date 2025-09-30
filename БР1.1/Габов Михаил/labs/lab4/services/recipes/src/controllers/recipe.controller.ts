@@ -1,58 +1,57 @@
-// lab4/services/recipes/src/controllers/recipe.controller.ts
 import {
-    Body, Controller, Delete, Get, Path, Post, Put, Query, Route, SuccessResponse, Tags, Res, TsoaResponse
+    Body, Controller, Delete, Get, Path, Post, Put, Query, Route, SuccessResponse, Tags, Res, TsoaResponse,
+    Security, Request,
+    NoSecurity
 } from "tsoa";
 import { AppDataSource } from "../data-source";
 import { Ingredient, Recipe, RecipeIngredient, RecipeStep } from "../models";
 import {
     RecipeCreateDto, RecipeDetailResponseDto, RecipeListResponseDto, RecipeUpdateDto
 } from "../dtos/recipe.dto";
-import { Channel } from 'amqplib';
-import { rabbitMQChannel } from '../index';
+import { getRabbitMQChannel } from '../rabbitmq-config';
 import axios from 'axios';
 
 @Route("recipes")
 @Tags("Recipes")
+@Security("jwt")
 export class RecipeController extends Controller {
     private recipeRepo = AppDataSource.getRepository(Recipe);
     private ingRepo = AppDataSource.getRepository(Ingredient);
     private riRepo = AppDataSource.getRepository(RecipeIngredient);
     private stepRepo = AppDataSource.getRepository(RecipeStep);
 
-    @SuccessResponse("201", "Created")
-    @Post()
-    public async createRecipe(
-        @Body() requestBody: RecipeCreateDto,
-        @Res() res: TsoaResponse<400 | 500, { message: string }>
-    ): Promise<RecipeDetailResponseDto> {
-        const { ingredients, steps, user, ...recipeData } = requestBody;
+@SuccessResponse("201", "Created")
+@Post()
+public async createRecipe(
+    @Body() requestBody: RecipeCreateDto,
+    @Request() request: any
+): Promise<RecipeDetailResponseDto> {
+    
+    
+    const userId = request.user.id;
+    const { ingredients, steps, ...recipeData } = requestBody;
+    
+    const recipe = this.recipeRepo.create({ ...recipeData, userId: userId });
+    const savedRecipe = await this.recipeRepo.save(recipe);
 
-        if (!user || !user.id) {
-            this.setStatus(400);
-            throw new Error("User ID must be provided in the request body.");
+    const savedRecipeIngredients: RecipeIngredient[] = [];
+    const savedSteps: RecipeStep[] = [];
+
+    if (Array.isArray(ingredients)) {
+        for (const ingDto of ingredients) {
+            const ingredientEntity = await this.ingRepo.findOneByOrFail({ id: ingDto.id });
+
+            const recipeIngredient = this.riRepo.create({
+                recipeId: savedRecipe.id,
+                ingredientId: ingredientEntity.id,
+                amount: ingDto.amount,
+            });
+            const savedRi = await this.riRepo.save(recipeIngredient);
+            
+            savedRi.ingredient = ingredientEntity;
+            savedRecipeIngredients.push(savedRi);
         }
-
-        const recipe = this.recipeRepo.create({ ...recipeData, userId: user.id });
-        const savedRecipe = await this.recipeRepo.save(recipe);
-
-        if (Array.isArray(ingredients)) {
-            for (const ingDto of ingredients) {
-                let ingredientEntity: Ingredient;
-                if (ingDto.id) {
-                    ingredientEntity = await this.ingRepo.findOneByOrFail({ id: ingDto.id });
-                } else {
-                    const existing = await this.ingRepo.findOneBy({ name: ingDto.name });
-                    ingredientEntity = existing ?? await this.ingRepo.save(this.ingRepo.create({ name: ingDto.name }));
-                }
-
-                const recipeIngredient = this.riRepo.create({
-                    recipeId: savedRecipe.id,
-                    ingredientId: ingredientEntity.id,
-                    amount: ingDto.amount,
-                });
-                await this.riRepo.save(recipeIngredient);
-            }
-        }
+    }
 
         if (Array.isArray(steps)) {
             for (const stepDto of steps) {
@@ -60,37 +59,58 @@ export class RecipeController extends Controller {
                     ...stepDto,
                     recipe: savedRecipe,
                 });
-                await this.stepRepo.save(step);
+                const savedStep = await this.stepRepo.save(step);
+                savedSteps.push(savedStep);
             }
         }
-
-        this.setStatus(201);
-
-        const fullRecipe = await this.recipeRepo.findOneOrFail({
-            where: { id: savedRecipe.id },
-            relations: ["steps", "recipeIngredients", "recipeIngredients.ingredient"],
-        });
-
-        if (rabbitMQChannel) {
+        
+        try {
+            const rabbitMQChannel = getRabbitMQChannel();
             const queue = 'new_recipe_events';
             const msg = JSON.stringify({
                 type: 'RecipeCreated',
                 recipeId: savedRecipe.id,
                 title: savedRecipe.title,
                 userId: savedRecipe.userId,
-                createdAt: savedRecipe.createdAt,
             });
-            await rabbitMQChannel.assertQueue(queue, { durable: true });
             rabbitMQChannel.sendToQueue(queue, Buffer.from(msg));
-            console.log(`[Recipes Service] Sent message to ${queue}: ${msg}`);
-        } else {
-            console.warn('[Recipes Service] RabbitMQ channel not available. Message for new recipe not sent.');
+            console.log(`[Recipes Service] Sent message to ${queue}`);
+        } catch (error) {
+            console.error('[Recipes Service] Failed to send message:', error);
         }
 
-        return await this.toRecipeDetailDto(fullRecipe);
+        this.setStatus(201);
+        
+        const username = await this.fetchUsername(savedRecipe.userId);
+        
+        return {
+            id: savedRecipe.id,
+            title: savedRecipe.title,
+            description: savedRecipe.description,
+            difficulty: savedRecipe.difficulty,
+            createdAt: savedRecipe.createdAt,
+            user: {
+                id: savedRecipe.userId,
+                username: username,
+            },
+            steps: savedSteps.map(s => ({
+                id: s.id,
+                stepNumber: s.stepNumber,
+                description: s.description,
+                imageUrl: s.imageUrl,
+            })),
+            recipeIngredients: savedRecipeIngredients.map(ri => ({
+                amount: ri.amount,
+                ingredient: {
+                    id: ri.ingredient.id,
+                    name: ri.ingredient.name,
+                }
+            })),
+        };
     }
 
     @Get()
+    @NoSecurity()
     public async getRecipes(
         @Query() ingredient?: string,
         @Query() difficulty?: string
@@ -107,6 +127,7 @@ export class RecipeController extends Controller {
     }
 
     @Get("/{recipeId}")
+    @NoSecurity()
     public async getRecipeById(@Path() recipeId: number): Promise<RecipeDetailResponseDto> {
         const recipe = await this.recipeRepo.findOne({
             where: { id: recipeId },
@@ -122,13 +143,19 @@ export class RecipeController extends Controller {
     @Put("/{recipeId}")
     public async updateRecipe(
         @Path() recipeId: number,
-        @Body() requestBody: RecipeUpdateDto
+        @Body() requestBody: RecipeUpdateDto,
+        @Request()request: any
     ): Promise<RecipeDetailResponseDto> {
         const { steps, ...data } = requestBody;
         const recipe = await this.recipeRepo.preload({ id: recipeId, ...data });
         if (!recipe) {
             this.setStatus(404);
             throw new Error("Recipe not found");
+        }
+
+        if (recipe.userId !== request.user.id) {
+            this.setStatus(403);
+            throw new Error("User is not authorized to update this recipe");
         }
 
         await AppDataSource.transaction(async (em) => {
@@ -148,11 +175,24 @@ export class RecipeController extends Controller {
             where: { id: recipeId },
             relations: ["steps", "recipeIngredients", "recipeIngredients.ingredient"],
         });
-        return await this.toRecipeDetailDto(updatedRecipe); // ДОБАВИТЬ await
+        return await this.toRecipeDetailDto(updatedRecipe);
     }
 
     @Delete("/{recipeId}")
-    public async deleteRecipe(@Path() recipeId: number): Promise<{ success: boolean }> {
+    public async deleteRecipe(@Path() recipeId: number, @Request() request: any): Promise<{ success: boolean }> {
+
+
+        const recipe = await this.recipeRepo.findOneBy({ id: recipeId });
+        if (!recipe) {
+            this.setStatus(404);
+            throw new Error("Recipe not found");
+        }
+        
+        if (recipe.userId !== request.user.id) {
+            this.setStatus(403);
+            throw new Error("User is not authorized to delete this recipe");
+        }
+
         const result = await this.recipeRepo.delete(recipeId);
         if (!result.affected) {
             this.setStatus(404);

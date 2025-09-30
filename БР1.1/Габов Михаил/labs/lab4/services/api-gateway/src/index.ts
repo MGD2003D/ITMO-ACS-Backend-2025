@@ -20,11 +20,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 const authenticateAndInjectUser = (req: Request, res: Response, next: NextFunction) => {
+
+    delete req.headers['x-user-id'];
+
     const authHeader = req.headers.authorization;
     if (authHeader) {
         const token = authHeader.split(' ')[1];
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key') as { userId: number };
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'bananza') as { userId: number };
             req.headers['x-user-id'] = decoded.userId.toString();
         } catch (err) {
         }
